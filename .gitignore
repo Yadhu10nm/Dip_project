@@ -1,0 +1,96 @@
+# ==========================================
+# Git Ignore for AI Security CCTV & DIP System
+# ==========================================
+
+# --- Python Bytecode & Runtime Artifacts ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# --- Virtual Environments ---
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+bin/
+include/
+lib/
+lib64/
+
+# --- Testing & Code Quality ---
+.pytest_cache/
+.coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+htmlcov/
+.cache
+.tox/
+.nox/
+.mypy_cache/
+.pyre/
+.pytype/
+
+# --- Dynamic Surveillance Data, Datasets & Models ---
+# Preserve directory structure with .gitkeep but ignore dynamic captures & large models
+data/dataset/*
+!data/dataset/.gitkeep
+
+data/intruders/*
+!data/intruders/.gitkeep
+
+data/models/*
+!data/models/.gitkeep
+
+# Runtime JSON databases (local registered users whitelist & incident audit logs)
+data/authorized_users.json
+data/audit_log.json
+
+# Image snapshots & video recordings
+*.avi
+*.mp4
+*.mkv
+*.mov
+
+# --- IDEs & Code Editors ---
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# --- Environment Variables & Sensitive Credentials ---
+.env
+.env.*
+*.env
+*.secret
+*.pem
+*.key
+
+# --- Operating System Files ---
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# --- Distribution & Build ---
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg

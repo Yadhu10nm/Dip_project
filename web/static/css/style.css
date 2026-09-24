@@ -1,0 +1,119 @@
+/* AI CCTV Surveillance Interface Styling */
+
+:root {
+    --cctv-green: #00ff73;
+    --cctv-red: #ff3344;
+    --cctv-cyan: #00e5ff;
+    --cctv-dark-bg: #0b0d10;
+    --cctv-card-bg: #12161c;
+}
+
+body {
+    background-color: var(--cctv-dark-bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #e0e6ed;
+    overflow-x: hidden;
+}
+
+/* Pulsing Red Recording Indicator */
+.pulse-rec {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    background-color: var(--cctv-red);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--cctv-red);
+    animation: pulse-animation 1.5s infinite;
+}
+
+@keyframes pulse-animation {
+    0% { transform: scale(0.9); opacity: 0.4; }
+    50% { transform: scale(1.2); opacity: 1.0; }
+    100% { transform: scale(0.9); opacity: 0.4; }
+}
+
+/* Video Feed Container */
+.video-feed-container {
+    border-radius: 4px;
+    overflow: hidden;
+    min-height: 400px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #2a333f;
+    box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.9);
+}
+
+.cctv-stream {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    max-height: 600px;
+    display: block;
+}
+
+/* HUD Overlay on Feed */
+.hud-top-left {
+    position: absolute;
+    top: 10px;
+    left: 14px;
+    z-index: 10;
+    background: rgba(10, 10, 10, 0.7);
+    padding: 3px 8px;
+    border-radius: 3px;
+    border-left: 2px solid var(--cctv-red);
+}
+
+/* User & Intruder Cards */
+.user-card, .intruder-card {
+    background: var(--cctv-card-bg);
+    border: 1px solid #222a35;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.user-card:hover {
+    border-color: var(--cctv-cyan);
+    box-shadow: 0 0 8px rgba(0, 229, 255, 0.15);
+}
+
+.intruder-card {
+    border-left: 3px solid var(--cctv-red) !important;
+}
+
+.intruder-card:hover {
+    box-shadow: 0 0 12px rgba(255, 51, 68, 0.25);
+}
+
+.user-thumb {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid #334155;
+}
+
+.intruder-thumb {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid var(--cctv-red);
+}
+
+/* Nav Pills */
+.nav-pills .nav-link {
+    color: #94a3b8;
+    border-radius: 3px;
+}
+
+.nav-pills .nav-link.active {
+    background-color: #1e293b;
+    color: #38bdf8;
+    border: 1px solid #38bdf8;
+}
+
+.btn-xs {
+    font-size: 0.75rem;
+    padding: 0.15rem 0.4rem;
+}
