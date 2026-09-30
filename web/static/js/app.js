@@ -57,6 +57,21 @@ async function fetchStatus() {
             voiceBtn.className = "btn btn-sm btn-secondary";
         }
 
+        // Locate Person target badge & status
+        const activeTargetBadge = document.getElementById("activeTargetBadge");
+        const locateStatusText = document.getElementById("locateStatusText");
+        if (activeTargetBadge && locateStatusText) {
+            if (data.locate_target) {
+                activeTargetBadge.className = "badge bg-warning text-dark small font-monospace fw-bold";
+                activeTargetBadge.innerText = `TARGET: ${data.locate_target.toUpperCase()}`;
+                locateStatusText.innerHTML = `<span class="text-warning"><i class="fa-solid fa-spinner fa-spin me-1"></i> Active Target: ${data.locate_target}</span>`;
+            } else {
+                activeTargetBadge.className = "badge bg-dark border border-warning text-warning small font-monospace";
+                activeTargetBadge.innerText = "TARGET: NONE";
+                locateStatusText.innerHTML = `<span class="text-secondary"><i class="fa-solid fa-circle-info me-1"></i> Status: Standby / No target set</span>`;
+            }
+        }
+
         // DIP state button
         const dipText = document.getElementById("dipBtnText");
         const dipBtn = document.getElementById("toggleDipBtn");
@@ -67,8 +82,39 @@ async function fetchStatus() {
             dipText.innerText = "DIP Inspector (4-Way)";
             dipBtn.className = "btn btn-sm btn-outline-info";
         }
+
+        // Camera Flip button
+        const flipText = document.getElementById("flipBtnText");
+        const flipBtn = document.getElementById("toggleFlipBtn");
+        if (flipText && flipBtn) {
+            if (data.camera_flipped) {
+                flipText.innerText = "Flip: ON";
+                flipBtn.className = "btn btn-sm btn-light";
+            } else {
+                flipText.innerText = "Flip: OFF";
+                flipBtn.className = "btn btn-sm btn-outline-light";
+            }
+        }
     } catch (err) {
         console.error("Status fetch error:", err);
+    }
+}
+
+async function toggleCameraFlip() {
+    try {
+        const res = await fetch("/api/toggle_flip", { method: "POST" });
+        const data = await res.json();
+        const flipBtn = document.getElementById("toggleFlipBtn");
+        const flipText = document.getElementById("flipBtnText");
+        if (data.camera_flipped) {
+            flipText.innerText = "Flip: ON";
+            flipBtn.className = "btn btn-sm btn-light";
+        } else {
+            flipText.innerText = "Flip: OFF";
+            flipBtn.className = "btn btn-sm btn-outline-light";
+        }
+    } catch (err) {
+        console.error("Camera flip error:", err);
     }
 }
 
@@ -260,10 +306,21 @@ async function captureLiveSampleBurst() {
     fetchStatus();
 }
 
-async function uploadUserPhoto() {
+function updateSelectedFilesCount() {
+    const fileInput = document.getElementById("uploadPhotoInput");
+    const badge = document.getElementById("selectedFilesBadge");
+    if (!fileInput || !badge) return;
+    const count = fileInput.files ? fileInput.files.length : 0;
+    badge.innerText = `${count} selected`;
+    badge.className = count > 0 ? "badge bg-info text-dark font-monospace" : "badge bg-secondary font-monospace";
+}
+
+async function uploadUserPhotos() {
     const nameInput = document.getElementById("newUserName");
     const roleInput = document.getElementById("newUserRole");
     const fileInput = document.getElementById("uploadPhotoInput");
+    const uploadBtn = document.getElementById("uploadPhotosBtn");
+    const feedback = document.getElementById("uploadFeedback");
     const name = nameInput.value.trim();
     const role = roleInput.value.trim() || "Authorized Personnel";
 
@@ -273,11 +330,20 @@ async function uploadUserPhoto() {
         return;
     }
     if (!fileInput.files || fileInput.files.length === 0) {
-        alert("Please choose a photo file to upload.");
+        alert("Please select one or more photo files to upload.");
         return;
     }
 
-    // Create user if not created
+    const totalFiles = fileInput.files.length;
+    uploadBtn.disabled = true;
+    uploadBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin me-1"></i> Converting to Embeddings (${totalFiles} files)...`;
+    if (feedback) {
+        feedback.className = "small mb-2 text-info";
+        feedback.innerText = "Extracting facial features and indexing vectors into ChromaDB...";
+        feedback.classList.remove("d-none");
+    }
+
+    // 1. Create user if not created
     if (!activeEnrollmentUserId) {
         const createRes = await fetch("/api/users", {
             method: "POST",
@@ -285,26 +351,55 @@ async function uploadUserPhoto() {
             body: JSON.stringify({ name, role })
         });
         const createData = await createRes.json();
+        if (!createData.success) {
+            alert("Failed to initialize user: " + createData.error);
+            uploadBtn.disabled = false;
+            uploadBtn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up me-1"></i> Upload & Convert to Embeddings (ChromaDB)`;
+            return;
+        }
         activeEnrollmentUserId = createData.user.id;
     }
 
+    // 2. Prepare FormData with all selected files
     const formData = new FormData();
     formData.append("user_id", activeEnrollmentUserId);
-    formData.append("photo", fileInput.files[0]);
+    formData.append("name", name);
+    for (let i = 0; i < fileInput.files.length; i++) {
+        formData.append("photos", fileInput.files[i]);
+    }
 
-    const res = await fetch("/api/upload_photo", {
-        method: "POST",
-        body: formData
-    });
-    const data = await res.json();
-    if (data.success) {
-        alert("Photo processed and LBPH model updated successfully!");
-        loadUsers();
-        fetchStatus();
-    } else {
-        alert(data.error || "Failed to process photo.");
+    try {
+        const res = await fetch("/api/upload_photos", {
+            method: "POST",
+            body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+            uploadBtn.className = "btn btn-sm btn-success w-100";
+            uploadBtn.innerHTML = `<i class="fa-solid fa-circle-check me-1"></i> Indexed ${data.processed_count} vectors into ChromaDB!`;
+            if (feedback) {
+                feedback.className = "small mb-2 text-success";
+                feedback.innerText = data.message;
+            }
+            loadUsers();
+            fetchStatus();
+        } else {
+            alert(data.error || "Failed to process photos.");
+            uploadBtn.disabled = false;
+            uploadBtn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up me-1"></i> Upload & Convert to Embeddings (ChromaDB)`;
+            if (feedback) {
+                feedback.className = "small mb-2 text-danger";
+                feedback.innerText = data.error || "Processing failed.";
+            }
+        }
+    } catch (err) {
+        console.error("Upload error:", err);
+        alert("Upload error: " + err);
+        uploadBtn.disabled = false;
+        uploadBtn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up me-1"></i> Upload & Convert to Embeddings (ChromaDB)`;
     }
 }
+const uploadUserPhoto = uploadUserPhotos;
 
 function finishEnrollment() {
     // Reset modal state
@@ -317,8 +412,62 @@ function finishEnrollment() {
     captureBtn.disabled = false;
     captureBtn.innerHTML = `<i class="fa-solid fa-camera me-1"></i> Capture 25 Face Samples (Auto-Burst)`;
 
+    const fileInput = document.getElementById("uploadPhotoInput");
+    if (fileInput) fileInput.value = "";
+    updateSelectedFilesCount();
+
+    const uploadBtn = document.getElementById("uploadPhotosBtn");
+    if (uploadBtn) {
+        uploadBtn.className = "btn btn-sm btn-outline-info w-100";
+        uploadBtn.disabled = false;
+        uploadBtn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up me-1"></i> Upload & Convert to Embeddings (ChromaDB)`;
+    }
+    const feedback = document.getElementById("uploadFeedback");
+    if (feedback) {
+        feedback.className = "small mb-2 text-info d-none";
+        feedback.innerText = "";
+    }
+
     const modal = bootstrap.Modal.getInstance(document.getElementById("addUserModal"));
     if (modal) modal.hide();
     loadUsers();
     fetchStatus();
+}
+
+async function submitLocatePerson() {
+    const input = document.getElementById("locateInput");
+    const name = input ? input.value.trim() : "";
+    if (!name) return;
+
+    try {
+        const res = await fetch("/api/command", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ command: `locate ${name}` })
+        });
+        const data = await res.json();
+        if (data.success) {
+            fetchStatus();
+        }
+    } catch (e) {
+        console.error("Error setting locate target:", e);
+    }
+}
+
+async function clearLocatePerson() {
+    try {
+        const input = document.getElementById("locateInput");
+        if (input) input.value = "";
+        const res = await fetch("/api/command", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ command: "stop locating" })
+        });
+        const data = await res.json();
+        if (data.success) {
+            fetchStatus();
+        }
+    } catch (e) {
+        console.error("Error clearing locate target:", e);
+    }
 }

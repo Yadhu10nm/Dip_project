@@ -94,8 +94,9 @@ class CCTVHUD:
 
         # Telemetry info on bottom right
         mode_str = "DIP: ACTIVE" if is_dip_mode else "CCTV HUD"
-        telemetry_str = f"FPS: {fps:.1f} | {mode_str} | LBPH-DIP"
-        cv2.putText(canvas, telemetry_str, (w - 260, h - 9), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (180, 180, 180), 1, cv2.LINE_AA)
+        backend_str = "CHROMA-COSINE" if getattr(config, "RECOGNITION_BACKEND", "chroma_cosine") == "chroma_cosine" else "LBPH-DIP"
+        telemetry_str = f"FPS: {fps:.1f} | {mode_str} | {backend_str}"
+        cv2.putText(canvas, telemetry_str, (w - 300, h - 9), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (180, 180, 180), 1, cv2.LINE_AA)
 
     def _draw_authorized_target(self, canvas: np.ndarray, bbox: tuple, name: str, user_id: str, score: float):
         """Draws calm emerald tactical corner brackets and verified access badge."""
@@ -160,12 +161,15 @@ class CCTVHUD:
         cv2.rectangle(canvas, (callout_x, callout_y), (callout_x + card_w, callout_y + card_h), (10, 10, 45), -1)
         cv2.rectangle(canvas, (callout_x, callout_y), (callout_x + card_w, callout_y + card_h), primary_color, 2)
 
+        # Metric label
+        metric_str = f"SIM: {distance:.2f}" if distance <= 1.0 else f"DIST: {distance:.1f}"
+
         # Warning icon and text inside callout
         cv2.putText(canvas, "[!] UNAUTHORIZED PERSON", (callout_x + 8, callout_y + 18),
                     cv2.FONT_HERSHEY_DUPLEX, 0.46, (255, 255, 255), 1, cv2.LINE_AA)
         cv2.putText(canvas, "TARGET: NOT IN WHITELIST", (callout_x + 8, callout_y + 34),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.40, primary_color, 1, cv2.LINE_AA)
-        cv2.putText(canvas, f"THREAT: HIGH | DIST: {distance:.1f}", (callout_x + 8, callout_y + 49),
+        cv2.putText(canvas, f"THREAT: HIGH | {metric_str}", (callout_x + 8, callout_y + 49),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.38, (200, 200, 200), 1, cv2.LINE_AA)
 
         # Top alert banner over the head

@@ -24,36 +24,45 @@ This project is a Python-based AI security surveillance system that combines com
 ### 3. Face Detection & Recognition
 - Haar Cascade Classifier
   - used for face localization in each video frame
+- ChromaDB Vector Store & 128-D Facial Feature Embeddings
+  - primary recognition engine using persistent HNSW collection with Cosine distance metric
+  - converts face images to 128-dimensional unit-normalized embeddings
+  - performs fast Cosine Similarity nearest-neighbor classification
 - Local Binary Patterns Histograms (LBPH)
-  - used for face recognition and identity matching
+  - secondary / dual recognition engine for micro-texture histogram matching
 - Digital Image Processing (DIP) pipeline:
   - grayscale conversion
-  - CLAHE enhancement
+  - CLAHE illumination normalization
   - bilateral filtering
-  - LBP texture extraction
-  - chi-square distance matching
+  - LBP spatial texture extraction
+  - cosine similarity vector search
+  - real-time camera feed inversion (`cv2.flip`)
 
 ### 4. Web Application
 - Flask
   - powers the browser-based security dashboard
-  - serves the UI and live camera stream
+  - serves the UI, batch photo enrollment endpoints, and live camera stream
 - HTML / CSS / JavaScript
   - dashboard frontend
-  - real-time UI updates and user enrollment flow
+  - real-time UI telemetry, multi-image upload wizard, and camera flip toggle
 
 ### 5. Audio & Alerts
 - pyttsx3
   - text-to-speech engine used for security warnings
 - system alert logic and chime notifications
 
-### 6. Data Storage
+### 6. Data Storage & Vector Databases
+- ChromaDB (`chromadb`)
+  - persistent vector store in `data/chroma_db/`
+  - stores 128-D face embeddings with metadata for rapid Cosine Similarity matching
 - JSON files
   - `authorized_users.json`
   - `audit_log.json`
-- filesystem-based user dataset storage
+- Filesystem-based user dataset & models
   - `data/dataset/`
   - `data/models/`
   - `data/intruders/`
+  - `data/chroma_db/`
 
 ## Project Architecture
 
@@ -64,10 +73,14 @@ This project is a Python-based AI security surveillance system that combines com
   - image processing operations
 - `core/detector.py`
   - face detection logic
+- `core/embedding_engine.py`
+  - 128-D facial feature embedding extraction (SFace ONNX & DIP spatial texture fallback)
+- `core/vector_store.py`
+  - ChromaDB persistent vector storage & Cosine Similarity search
 - `core/recognizer.py`
-  - LBPH training and prediction
+  - ChromaDB Cosine Similarity classification and LBPH dual-engine
 - `core/access_manager.py`
-  - user enrollment, sample capture, and access management
+  - user enrollment (webcam burst & batch images), dataset management, and ChromaDB sync
 - `core/alert_system.py`
   - alerts, logging, and security snapshots
 - `core/cctv_hud.py`

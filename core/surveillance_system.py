@@ -66,7 +66,7 @@ class SurveillanceSystem:
             self.cap = None
 
     def read_raw_frame(self):
-        """Reads a single frame from webcam."""
+        """Reads a single frame from webcam, applying mirror inversion if enabled."""
         if self.cap is None or not self.cap.isOpened():
             self.start_camera()
 
@@ -77,6 +77,11 @@ class SurveillanceSystem:
             cv2.putText(blank, "CAMERA FEED OFFLINE", (160, 240),
                         cv2.FONT_HERSHEY_DUPLEX, 0.8, (0, 0, 255), 2)
             return blank
+
+        # Invert camera feed horizontally (mirror mode) like cv2.flip(frame, 1)
+        if getattr(config, "CAMERA_FLIP", False):
+            frame = cv2.flip(frame, getattr(config, "CAMERA_FLIP_CODE", 1))
+
         return frame
 
     def process_frame(self, frame: np.ndarray) -> np.ndarray:
@@ -144,6 +149,11 @@ class SurveillanceSystem:
         self.is_dip_mode = not self.is_dip_mode
         return self.is_dip_mode
 
+    def toggle_camera_flip(self) -> bool:
+        """Toggles horizontal camera mirror inversion."""
+        config.CAMERA_FLIP = not getattr(config, "CAMERA_FLIP", True)
+        return config.CAMERA_FLIP
+
     def get_status_summary(self) -> dict:
         """Returns live system telemetry for dashboard."""
         with self.lock:
@@ -151,15 +161,22 @@ class SurveillanceSystem:
             unauthorized = sum(1 for d in self.current_detections if not d["is_authorized"])
             authorized = sum(1 for d in self.current_detections if d["is_authorized"])
 
+        chroma_count = 0
+        if hasattr(self.recognizer, "vector_store") and self.recognizer.vector_store:
+            chroma_count = self.recognizer.vector_store.count()
+
         return {
             "fps": round(self.fps, 1),
             "total_faces": total_faces,
             "authorized_count": authorized,
             "unauthorized_count": unauthorized,
             "is_dip_mode": self.is_dip_mode,
+            "camera_flipped": getattr(config, "CAMERA_FLIP", True),
             "voice_enabled": self.alert_system.voice_enabled,
             "chime_enabled": self.alert_system.chime_enabled,
             "is_model_trained": self.recognizer.is_trained,
+            "chroma_embeddings": chroma_count,
+            "backend": getattr(config, "RECOGNITION_BACKEND", "chroma_cosine"),
             "registered_users": len(self.access_manager.list_users())
         }
 

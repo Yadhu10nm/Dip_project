@@ -1,5 +1,5 @@
 # ==========================================
-# Git Ignore for AI Security CCTV & DIP System
+# Git Ignore for AI Security CCTV & Face Recognition System
 # ==========================================
 
 # --- Python Bytecode & Runtime Artifacts ---
@@ -16,10 +16,6 @@ ENV/
 env/
 env.bak/
 venv.bak/
-bin/
-include/
-lib/
-lib64/
 
 # --- Testing & Code Quality ---
 .pytest_cache/
@@ -35,26 +31,31 @@ htmlcov/
 .pyre/
 .pytype/
 
-# --- Dynamic Surveillance Data, Datasets & Models ---
-# Preserve directory structure with .gitkeep but ignore dynamic captures & large models
-data/dataset/*
-!data/dataset/.gitkeep
+# --- Runtime Vector Database & Cache ---
+data/chroma_db/
+!data/chroma_db/.gitkeep
 
+# Intruder snapshots and incident evidence (captured dynamically)
 data/intruders/*
 !data/intruders/.gitkeep
+data/evidence/*
+!data/evidence/.gitkeep
 
-data/models/*
+# Model weights (auto-downloaded on first run from OpenCV Zoo)
+data/models/*.onnx
+data/models/*.yml
 !data/models/.gitkeep
 
-# Runtime JSON databases (local registered users whitelist & incident audit logs)
-data/authorized_users.json
+# Incident audit logs (generated dynamically at runtime)
 data/audit_log.json
 
-# Image snapshots & video recordings
+# --- Media Recordings & Snapshots ---
 *.avi
 *.mp4
 *.mkv
 *.mov
+*.wav
+*.mp3
 
 # --- IDEs & Code Editors ---
 .vscode/
@@ -68,7 +69,6 @@ data/audit_log.json
 # --- Environment Variables & Sensitive Credentials ---
 .env
 .env.*
-*.env
 *.secret
 *.pem
 *.key
