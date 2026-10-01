@@ -1,0 +1,15 @@
+{
+    "pan_center": 100.40625,
+    "tilt_center": 78.75,
+    "pan_min": 10.0,
+    "pan_max": 170.0,
+    "tilt_min": 20.0,
+    "tilt_max": 160.0,
+    "pan_inverted": false,
+    "tilt_inverted": false,
+    "pan_fov": 60.0,
+    "tilt_fov": 45.0,
+    "deadzone_pixels": 8,
+    "smoothing": 0.35,
+    "laser_on_target_only": true
+}

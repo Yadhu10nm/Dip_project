@@ -11,10 +11,12 @@ document.addEventListener("DOMContentLoaded", () => {
     fetchStatus();
     loadUsers();
     loadIntruderLogs();
+    fetchTurretStatus();
 
     // Periodic status & logs polling
     setInterval(fetchStatus, 1500);
     setInterval(loadIntruderLogs, 4000);
+    setInterval(fetchTurretStatus, 1500);
 });
 
 function updateLiveClock() {
@@ -33,6 +35,21 @@ async function fetchStatus() {
         document.getElementById("facesBadge").innerText = `FACES: ${data.total_faces}`;
         document.getElementById("userCountBadge").innerText = data.registered_users;
 
+        // Turret navbar badge
+        const turretNavBadge = document.getElementById("turretNavBadge");
+        if (turretNavBadge) {
+            if (data.turret_laser && data.turret_target_locked) {
+                turretNavBadge.className = "badge bg-danger text-light px-2 py-2 border border-danger fa-beat";
+                turretNavBadge.innerHTML = `<i class="fa-solid fa-bolt me-1"></i> LASER: FIRING (${data.turret_pan}°, ${data.turret_tilt}°)`;
+            } else if (data.turret_connected) {
+                turretNavBadge.className = "badge bg-success-subtle text-success border border-success px-2 py-2 font-monospace";
+                turretNavBadge.innerHTML = `<i class="fa-solid fa-crosshairs me-1"></i> TURRET: ${data.turret_port}`;
+            } else {
+                turretNavBadge.className = "badge bg-dark border border-secondary text-secondary px-2 py-2 font-monospace";
+                turretNavBadge.innerHTML = `<i class="fa-solid fa-microchip me-1"></i> TURRET: SIM`;
+            }
+        }
+
         // Threat status badge
         const threatBadge = document.getElementById("threatBadge");
         if (data.unauthorized_count > 0) {
@@ -45,6 +62,7 @@ async function fetchStatus() {
             threatBadge.className = "badge bg-success-subtle text-success border border-success px-3 py-2";
             threatBadge.innerHTML = `<i class="fa-solid fa-shield-halved me-1"></i> STATUS: SECURE`;
         }
+
 
         // Voice state button
         const voiceText = document.getElementById("voiceBtnText");
@@ -471,3 +489,298 @@ async function clearLocatePerson() {
         console.error("Error clearing locate target:", e);
     }
 }
+
+// ==========================================
+// ESP32 TURRET & CALIBRATION CONTROLLER
+// ==========================================
+
+let activeTurretStatus = null;
+let isUserDraggingSlider = false;
+
+async function fetchTurretStatus() {
+    try {
+        const res = await fetch("/api/turret/status");
+        if (!res.ok) return;
+        const data = await res.json();
+        const st = data.status || {};
+        const calib = st.calibration || {};
+        activeTurretStatus = st;
+
+        // 1. Live angles display
+        const panDisp = document.getElementById("livePanDisplay");
+        const tiltDisp = document.getElementById("liveTiltDisplay");
+        if (panDisp) panDisp.innerText = `${st.pan.toFixed(1)}°`;
+        if (tiltDisp) tiltDisp.innerText = `${st.tilt.toFixed(1)}°`;
+
+        // 2. Hardware connection status badge
+        const connBadge = document.getElementById("turretConnBadge");
+        if (connBadge) {
+            if (st.connected) {
+                connBadge.className = "badge bg-success-subtle text-success border border-success small font-monospace";
+                connBadge.innerText = `CONNECTED (${st.port})`;
+            } else if (st.is_mock) {
+                connBadge.className = "badge bg-dark border border-secondary text-secondary small font-monospace";
+                connBadge.innerText = "SIMULATION (No HW)";
+            } else {
+                connBadge.className = "badge bg-danger-subtle text-danger border border-danger small font-monospace";
+                connBadge.innerText = "DISCONNECTED";
+            }
+        }
+
+        // 3. Tab Laser state
+        const tabLaserState = document.getElementById("turretLaserState");
+        if (tabLaserState) {
+            tabLaserState.innerText = st.laser ? "ON" : "OFF";
+            tabLaserState.className = st.laser ? "text-danger fw-bold fa-beat" : "text-secondary";
+        }
+
+        // 4. Laser toggle button
+        const btnToggleLaser = document.getElementById("btnToggleLaser");
+        const laserBtnText = document.getElementById("laserBtnText");
+        if (btnToggleLaser && laserBtnText) {
+            if (st.laser) {
+                laserBtnText.innerText = "Laser: ON (FIRING)";
+                btnToggleLaser.className = "btn btn-sm btn-danger flex-fill fa-beat";
+            } else {
+                laserBtnText.innerText = "Laser: OFF";
+                btnToggleLaser.className = "btn btn-sm btn-outline-danger flex-fill";
+            }
+        }
+
+        // 5. Populate COM ports dropdown if needed
+        const portSelect = document.getElementById("portSelect");
+        if (portSelect && portSelect.options.length <= 1 && data.available_ports) {
+            data.available_ports.forEach(p => {
+                const opt = document.createElement("option");
+                opt.value = p.device;
+                opt.innerText = `${p.device} (${p.description || "Serial"})`;
+                if (p.device === st.port) opt.selected = true;
+                portSelect.appendChild(opt);
+            });
+        }
+
+        // 6. Update calibration UI (only if user is not actively adjusting sliders)
+        if (!isUserDraggingSlider) {
+            const checkPan = document.getElementById("checkInvertPan");
+            const checkTilt = document.getElementById("checkInvertTilt");
+            const panFov = document.getElementById("panFovSlider");
+            const tiltFov = document.getElementById("tiltFovSlider");
+            const smoothing = document.getElementById("smoothingSlider");
+
+            if (checkPan) checkPan.checked = !!calib.pan_inverted;
+            if (checkTilt) checkTilt.checked = !!calib.tilt_inverted;
+            if (panFov && calib.pan_fov) {
+                panFov.value = calib.pan_fov;
+                document.getElementById("panFovVal").innerText = calib.pan_fov;
+            }
+            if (tiltFov && calib.tilt_fov) {
+                tiltFov.value = calib.tilt_fov;
+                document.getElementById("tiltFovVal").innerText = calib.tilt_fov;
+            }
+            if (smoothing && calib.smoothing) {
+                smoothing.value = Math.round(calib.smoothing * 100);
+                document.getElementById("smoothVal").innerText = calib.smoothing.toFixed(2);
+            }
+        }
+
+    } catch (err) {
+        console.error("Error fetching turret status:", err);
+    }
+}
+
+async function setTurretMode(mode) {
+    try {
+        await fetch("/api/turret/set_mode", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: mode })
+        });
+        fetchTurretStatus();
+    } catch (e) {
+        console.error("Error setting turret mode:", e);
+    }
+}
+
+let panTimeout = null;
+function onManualPanChange(val) {
+    document.getElementById("manualPanVal").innerText = `${val}°`;
+    const tilt = parseFloat(document.getElementById("manualTiltSlider").value) || 90;
+    
+    // Debounce slider updates to 30ms to prevent request flood
+    clearTimeout(panTimeout);
+    panTimeout = setTimeout(async () => {
+        try {
+            await fetch("/api/turret/move", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ pan: parseFloat(val), tilt: tilt })
+            });
+            fetchTurretStatus();
+        } catch (e) {
+            console.error("Error moving pan:", e);
+        }
+    }, 30);
+}
+
+let tiltTimeout = null;
+function onManualTiltChange(val) {
+    document.getElementById("manualTiltVal").innerText = `${val}°`;
+    const pan = parseFloat(document.getElementById("manualPanSlider").value) || 90;
+
+    clearTimeout(tiltTimeout);
+    tiltTimeout = setTimeout(async () => {
+        try {
+            await fetch("/api/turret/move", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ pan: pan, tilt: parseFloat(val) })
+            });
+            fetchTurretStatus();
+        } catch (e) {
+            console.error("Error moving tilt:", e);
+        }
+    }, 30);
+}
+
+async function toggleTurretLaser() {
+    const currentState = activeTurretStatus ? activeTurretStatus.laser : false;
+    try {
+        await fetch("/api/turret/laser", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ laser: !currentState })
+        });
+        fetchTurretStatus();
+    } catch (e) {
+        console.error("Error toggling laser:", e);
+    }
+}
+
+async function pulseTurretLaser() {
+    try {
+        await fetch("/api/turret/pulse", { method: "POST" });
+        fetchTurretStatus();
+    } catch (e) {
+        console.error("Error pulsing laser:", e);
+    }
+}
+
+async function centerTurretServos() {
+    document.getElementById("manualPanSlider").value = 90;
+    document.getElementById("manualTiltSlider").value = 90;
+    document.getElementById("manualPanVal").innerText = "90°";
+    document.getElementById("manualTiltVal").innerText = "90°";
+    try {
+        await fetch("/api/turret/move", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pan: 90.0, tilt: 90.0, laser: false })
+        });
+        fetchTurretStatus();
+    } catch (e) {
+        console.error("Error centering turret:", e);
+    }
+}
+
+async function calibrateCenterPosition() {
+    try {
+        const res = await fetch("/api/turret/calibrate_center", { method: "POST" });
+        const data = await res.json();
+        if (data.success) {
+            alert(`[Calibration Saved] Center locked at Pan ${data.pan_center}° / Tilt ${data.tilt_center}°. Intruders will be targeted relative to this reference!`);
+            fetchTurretStatus();
+        }
+    } catch (e) {
+        alert("Failed to calibrate center: " + e.message);
+    }
+}
+
+async function updateCalibrationSettings() {
+    const invertPan = document.getElementById("checkInvertPan").checked;
+    const invertTilt = document.getElementById("checkInvertTilt").checked;
+    const panFov = parseFloat(document.getElementById("panFovSlider").value);
+    const tiltFov = parseFloat(document.getElementById("tiltFovSlider").value);
+    const smooth = parseFloat(document.getElementById("smoothingSlider").value) / 100.0;
+
+    document.getElementById("panFovVal").innerText = panFov;
+    document.getElementById("tiltFovVal").innerText = tiltFov;
+    document.getElementById("smoothVal").innerText = smooth.toFixed(2);
+
+    try {
+        await fetch("/api/turret/calibrate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                pan_inverted: invertPan,
+                tilt_inverted: invertTilt,
+                pan_fov: panFov,
+                tilt_fov: tiltFov,
+                smoothing: smooth
+            })
+        });
+        fetchTurretStatus();
+    } catch (e) {
+        console.error("Error updating calibration:", e);
+    }
+}
+
+async function resetTurretCalibration() {
+    if (!confirm("Reset all turret servo calibration settings to factory defaults (90° center, 60°/45° FOV)?")) {
+        return;
+    }
+    try {
+        await fetch("/api/turret/reset_calibration", { method: "POST" });
+        fetchTurretStatus();
+    } catch (e) {
+        console.error("Error resetting calibration:", e);
+    }
+}
+
+async function reconnectTurretPort() {
+    const port = document.getElementById("portSelect").value;
+    try {
+        const res = await fetch("/api/turret/reconnect", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ port: port })
+        });
+        const data = await res.json();
+        if (data.connected) {
+            alert(`Connected successfully to ESP32 on ${data.port}!`);
+        } else {
+            alert(`Could not connect on ${port}. Operating in virtual simulation mode.`);
+        }
+        fetchTurretStatus();
+    } catch (e) {
+        console.error("Error reconnecting port:", e);
+    }
+}
+
+// Interactive Click-to-Aim on Video Feed
+async function onVideoFeedClick(event) {
+    const img = event.target;
+    const rect = img.getBoundingClientRect();
+    const clickX = event.clientX - rect.left;
+    const clickY = event.clientY - rect.top;
+
+    // Scale to native video resolution (640x480 standard)
+    const nativeWidth = 640;
+    const nativeHeight = 480;
+    const scaleX = nativeWidth / rect.width;
+    const scaleY = nativeHeight / rect.height;
+
+    const frameX = clickX * scaleX;
+    const frameY = clickY * scaleY;
+
+    try {
+        await fetch("/api/turret/aim_pixel", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ x: frameX, y: frameY, laser: true })
+        });
+        fetchTurretStatus();
+    } catch (e) {
+        console.error("Error aiming at pixel:", e);
+    }
+}
+

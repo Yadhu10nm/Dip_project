@@ -14,9 +14,11 @@ An enterprise-grade, modular, agentic surveillance station built with **Python**
 6. [How to Execute the Project](#-6-how-to-execute-the-project)
 7. [Configuration Reference (config.py)](#-7-configuration-reference-configpy)
 8. [REST API Documentation](#-8-rest-api-documentation)
-9. [Running Automated Tests](#-9-running-automated-tests)
+9. [ESP32 Pan-Tilt Sentry Turret & Interactive Calibration](#-10-esp32-pan-tilt-sentry-turret--interactive-calibration)
+10. [Running Automated Tests](#-11-running-automated-tests)
 
 ---
+
 
 ## 🏗️ 1. Core Principle & Vision Pipeline
 
@@ -250,8 +252,8 @@ The Web Dashboard exposes a REST API for remote integration:
 
 | Method | Endpoint | Description |
 |:---|:---|:---|
-| `GET` | `/video_feed` | Multipart MJPEG live video stream. |
-| `GET` | `/api/status` | System telemetry (FPS, face count, authorized count, target). |
+| `GET` | `/video_feed` | Multipart MJPEG live video stream (supports click-to-aim). |
+| `GET` | `/api/status` | System telemetry (FPS, face count, authorized count, turret status). |
 | `POST` | `/api/command` | Dispatches command string (e.g. `{"command": "locate yadhu"}`). |
 | `POST` | `/api/toggle_dip` | Toggles 4-Quadrant DIP view on/off. |
 | `POST` | `/api/toggle_voice` | Toggles speech synthesis on/off. |
@@ -261,26 +263,67 @@ The Web Dashboard exposes a REST API for remote integration:
 | `POST` | `/api/upload_photos`| Uploads image files to extract embeddings into ChromaDB. |
 | `GET` | `/api/intruders` | Retrieves recent security breach logs. |
 | `POST` | `/api/clear_intruders`| Clears the security incident audit log. |
+| `GET` | `/api/turret/status` | Real-time pan/tilt angles, laser state, and calibration settings. |
+| `POST` | `/api/turret/move` | Manually positions servos to specific (pan, tilt) angles. |
+| `POST` | `/api/turret/laser` | Toggles physical laser diode ON / OFF. |
+| `POST` | `/api/turret/pulse` | Fires a safe 1.5-second diagnostic laser pulse. |
+| `POST` | `/api/turret/calibrate_center` | Locks current servo angles as optical center reference. |
+| `POST` | `/api/turret/calibrate` | Updates FOV sensitivity, axis inversion, and smoothing factors. |
+| `POST` | `/api/turret/aim_pixel` | Aims turret and laser at specific screen pixel (click-to-aim). |
 
 ---
 
-## 🧪 9. Running Automated Tests
+## 🎯 10. ESP32 Pan-Tilt Sentry Turret & Interactive Calibration
+
+The system features real-time robotic sentry integration using an **ESP32**, **2x TowerPro SG90 micro-servos** (Pan & Tilt), and a **red laser diode module**.
+
+### Automated Intruder Tracking Behavior:
+1. **Intruder Engagement**: When an unauthorized person enters the camera field of view, the system calculates their face centroid, maps pixels to servo angles, and **locks onto the intruder with the laser beam**.
+2. **Threat Prioritization**: If multiple unknown individuals appear, the sentry automatically targets the closest intruder (largest face bounding box).
+3. **Standby Safety**: If only authorized personnel or an empty room is detected, the laser turns **OFF** and the turret smoothly returns to home (90°, 90°).
+4. **Hardware Failsafe**: Firmware turns off the laser automatically if communication is interrupted for >2.5 seconds.
+
+### Quick Hardware Setup:
+- **Pan Servo**: Signal → GPIO 13, VCC → 5V external, GND → Common GND
+- **Tilt Servo**: Signal → GPIO 18, VCC → 5V external, GND → Common GND
+- **Laser Diode**: Signal → GPIO 16, GND → Common GND
+- Firmware: Open `hardware/esp32_laser_turret.ino` in Arduino IDE and upload to ESP32.
+
+
+### Calibration Methods:
+- **Web Dashboard**: Open `http://localhost:5000`, switch to the **Turret** tab, adjust sliders, and click **"Set Current Position as Center"**.
+- **Click-to-Aim**: Click anywhere on the live video stream to aim the turret and test alignment in real time.
+- **Standalone Visual Calibration Tool**:
+  ```bash
+  python calibrate_turret.py
+  ```
+  *Click on screen to aim, [C] to lock center, [SPACE] to fire laser, [I/K] to invert axes, [S] to save.*
+- **Hardware Diagnostic Test**:
+  ```bash
+  python skills/turret_skill/examples/test_turret_hardware.py
+  ```
+
+---
+
+## 🧪 11. Running Automated Tests
 
 Run the comprehensive automated test suite with `pytest`:
 ```bash
-pytest tests/
+python -m pytest tests/
 ```
 
 ### Test Coverage Summary:
+- **`test_turret.py`**: ESP32 sentry calibration mapping, axis inversion, mock controller, intruder tracking, threat prioritization, and laser trigger logic.
 - **`test_face_detection.py`**: YuNet DNN multi-face detection, Haar fallback, and bounding box resolution.
 - **`test_preprocessing.py`**: Face ROI cropping, padding margins, and landmark translation.
 - **`test_embedding.py`**: 128-D SFace feature extraction, unit normalization, and fallback descriptors.
 - **`test_vector_database.py`**: ChromaDB upsert, delete, HNSW cosine search, and RAG consensus.
 - **`test_recognition.py`**: Authorized classification, unknown rejection, and multi-identity matching.
 - **`test_locator.py`**: Person Locator target resolution and non-existent target handling.
-- **`test_enrollment.py`**: Single-face constraint verification (0 reject, 1 accept, 2+ reject).
+- **`test_enrollment.py`**: Single-face constraint verification.
 - **`test_evidence.py`**: Snapshot storage, incident watermarking, and cooldown throttling.
 - **`test_tts.py`**: Thread-safe audio generation and debouncing.
 - **`test_commands.py`**: Natural language command parsing.
 - **`test_orchestrator.py`**: End-to-end vision loop and state dispatching.
 - **`test_dip_pipeline.py`**: Digital image processing transforms (Grayscale, CLAHE, Bilateral, LBP).
+

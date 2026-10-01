@@ -1,1 +1,10 @@
-[]
+[
+  {
+    "id": "AUTH_001",
+    "name": "Authorized User",
+    "role": "Authorized Personnel",
+    "created_at": "2026-10-01 14:00:23",
+    "sample_count": 25,
+    "thumbnail": "api/user_photo/AUTH_001/sample_000.jpg"
+  }
+]

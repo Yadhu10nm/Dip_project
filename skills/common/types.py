@@ -138,6 +138,13 @@ class SystemState:
     last_alert_time: float = 0.0
     last_snapshot_time: float = 0.0
     fps: float = 0.0
+    turret_connected: bool = False
+    turret_pan: float = 90.0
+    turret_tilt: float = 90.0
+    turret_laser: bool = False
+    turret_target_locked: bool = False
+    turret_port: str = "DISCONNECTED"
+    turret_is_mock: bool = True
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -149,4 +156,12 @@ class SystemState:
             "detected_count": len(self.detected_people),
             "people": self.detected_people,
             "fps": round(self.fps, 1),
+            "turret_connected": self.turret_connected,
+            "turret_pan": round(self.turret_pan, 1),
+            "turret_tilt": round(self.turret_tilt, 1),
+            "turret_laser": self.turret_laser,
+            "turret_target_locked": self.turret_target_locked,
+            "turret_port": self.turret_port,
+            "turret_is_mock": self.turret_is_mock,
         }
+

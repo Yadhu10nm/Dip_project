@@ -28,6 +28,7 @@ from skills.hud_skill.implementation import HUDSkill
 from skills.dip_inspector_skill.implementation import DIPInspectorSkill
 from skills.enrollment_skill.implementation import EnrollmentSkill
 from skills.audit_skill.implementation import AuditSkill
+from skills.turret_skill.implementation import TurretSkill
 
 
 class SystemOrchestrator:
@@ -42,9 +43,11 @@ class SystemOrchestrator:
         event_bus: Optional[EventBus] = None,
         camera: Optional[CameraSkill] = None,
         vector_db: Optional[VectorDatabaseSkill] = None,
+        turret: Optional[TurretSkill] = None,
     ):
         self.bus = event_bus or EventBus()
         self.state = SystemState()
+
 
         # Instantiate Skills
         self.camera = camera or CameraSkill()
@@ -82,6 +85,15 @@ class SystemOrchestrator:
             vector_db=self.vector_db,
         )
         self.audit = AuditSkill(log_file=config.AUDIT_LOG_FILE)
+        self.turret = turret or TurretSkill()
+
+        # Sync initial hardware state
+        self.state.turret_connected = self.turret.controller.is_connected
+        self.state.turret_port = self.turret.controller.status.port
+        self.state.turret_is_mock = self.turret.controller.is_mock
+        self.state.turret_pan = self.turret.controller.status.pan
+        self.state.turret_tilt = self.turret.controller.status.tilt
+        self.state.turret_laser = self.turret.controller.status.laser
 
         # Telemetry
         self._last_frame_time = time.time()
@@ -89,6 +101,7 @@ class SystemOrchestrator:
         self._active_frame: Optional[np.ndarray] = None
         self._locate_was_found: Optional[bool] = None
         self._locate_missing_frames = 0
+
 
         # Register Event Handlers
         self._register_event_handlers()
@@ -172,7 +185,16 @@ class SystemOrchestrator:
         elif cmd.type == "GET_STATUS":
             return {"success": True, "status": self.get_status()}
 
+        elif cmd.type == "TURRET_CALIBRATE_CENTER":
+            res = self.turret.calibrate_center_current()
+            return {"success": True, "action": "TURRET_CALIBRATE_CENTER", "result": res}
+
+        elif cmd.type == "TURRET_PULSE_LASER":
+            res = self.turret.pulse_laser(duration_seconds=float(cmd.params.get("duration", 1.5)))
+            return {"success": True, "action": "TURRET_PULSE_LASER", "result": res}
+
         return {"success": False, "error": f"Unhandled command type: {cmd.type}"}
+
 
     def process_cycle(self) -> Tuple[np.ndarray, List[RecognitionResult], Optional[PersonLocation]]:
         """
@@ -238,6 +260,19 @@ class SystemOrchestrator:
         # 4. Alert & Security Breach Evaluation
         self.alerter.evaluate_detections(recognitions, frame_timestamp=now)
 
+        # 4b. Sentry Turret Intruder Tracking & Laser Engagement
+        turret_st = None
+        if getattr(config, "TURRET_ENABLED", True) and raw_frame is not None and raw_frame.size > 0:
+            h, w = raw_frame.shape[:2]
+            turret_st = self.turret.track_frame(recognitions, frame_width=w, frame_height=h)
+            self.state.turret_connected = turret_st.connected
+            self.state.turret_pan = turret_st.pan
+            self.state.turret_tilt = turret_st.tilt
+            self.state.turret_laser = turret_st.laser
+            self.state.turret_target_locked = turret_st.target_locked
+            self.state.turret_port = turret_st.port
+            self.state.turret_is_mock = turret_st.is_mock
+
         # 5. Visual Rendering (HUD or DIP Mode)
         if self.state.dip_mode:
             display_frame = self.dip_inspector.create_quad_view(raw_frame)
@@ -248,6 +283,7 @@ class SystemOrchestrator:
                 person_location=person_loc,
                 fps=self._fps_smoothed,
                 is_dip_mode=self.state.dip_mode,
+                turret_status=turret_st,
             )
 
         return display_frame, recognitions, person_loc
@@ -260,6 +296,7 @@ class SystemOrchestrator:
             "chroma_vectors_count": self.vector_db.count(),
             "camera_open": self.camera.is_opened(),
             "evidence_count": len(self.evidence.list_evidence()),
+            "turret": self.turret.get_status(),
         }
 
     def start_camera(self) -> bool:
@@ -270,4 +307,6 @@ class SystemOrchestrator:
         """Stops camera and background threads safely."""
         self.camera.stop()
         self.tts.stop()
+        self.turret.stop()
         self.state.camera_active = False
+

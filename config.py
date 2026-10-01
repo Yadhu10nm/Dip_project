@@ -67,3 +67,12 @@ INTRUDER_SNAPSHOT_COOLDOWN = float(os.getenv("INTRUDER_SNAPSHOT_COOLDOWN", "10.0
 
 # Locator Configuration
 PERSON_LOCATOR_TIMEOUT = float(os.getenv("PERSON_LOCATOR_TIMEOUT", "10.0"))
+
+# ESP32 Pan-Tilt Sentry Turret & Calibration Configuration
+TURRET_ENABLED = os.getenv("TURRET_ENABLED", "True").lower() in ("true", "1", "yes")
+TURRET_PORT = os.getenv("TURRET_PORT", "COM5")  # Connected to ESP32-S3 on COM5
+
+TURRET_BAUD = int(os.getenv("TURRET_BAUD", "115200"))
+TURRET_CALIBRATION_FILE = os.path.join(DATA_DIR, "turret_calibration.json")
+TURRET_FAILSAFE_TIMEOUT = float(os.getenv("TURRET_FAILSAFE_TIMEOUT", "2.5"))
+

@@ -24,6 +24,8 @@ class DesktopUISkill:
         print("    [D]     - Toggle DIP Inspector (4-Quadrant Pipeline View)")
         print("    [S]     - Toggle Voice / Audio Alert")
         print("    [F]     - Toggle Camera Mirror Inversion")
+        print("    [T]     - Test Sentry Laser Pulse (1.5s Diagnostic)")
+        print("    [C]     - Center Sentry Turret (90°, 90°)")
         print("    [L]     - Print Recent Intrusion Audit Logs")
         print("    [Q/ESC] - Quit Surveillance System")
         print("=" * 65 + "\n")
@@ -57,10 +59,17 @@ class DesktopUISkill:
                     self.orchestrator.state.camera_flipped = self.orchestrator.camera.flip_horizontal
                     state = "ON" if self.orchestrator.state.camera_flipped else "OFF"
                     print(f"[DesktopUISkill] Camera Mirror: {state}")
+                elif key in (ord('t'), ord('T')):
+                    self.orchestrator.turret.pulse_laser(duration_seconds=1.5)
+                    print("[DesktopUISkill] Sentry Laser Diagnostic Pulse: FIRED (1.5s)")
+                elif key in (ord('c'), ord('C')):
+                    self.orchestrator.turret.calibrate_center_current()
+                    print(f"[DesktopUISkill] Center Calibrated: ({self.orchestrator.turret.calibration.pan_center}°, {self.orchestrator.turret.calibration.tilt_center}°)")
                 elif key in (ord('l'), ord('L')):
                     self._print_audit_logs()
                 elif key in (ord('r'), ord('R')):
                     self._handle_interactive_enrollment()
+
 
         finally:
             cv2.destroyAllWindows()

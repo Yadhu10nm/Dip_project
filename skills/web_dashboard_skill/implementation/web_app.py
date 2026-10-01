@@ -53,7 +53,15 @@ class WebDashboardSkill:
                 "is_dip_mode": state.dip_mode,
                 "camera_flipped": state.camera_flipped,
                 "locate_target": state.locate_target,
+                "turret_connected": state.turret_connected,
+                "turret_port": state.turret_port,
+                "turret_is_mock": state.turret_is_mock,
+                "turret_pan": round(state.turret_pan, 1),
+                "turret_tilt": round(state.turret_tilt, 1),
+                "turret_laser": state.turret_laser,
+                "turret_target_locked": state.turret_target_locked,
             })
+
 
         @app.route("/api/command", methods=["POST"])
         def api_command():
@@ -186,6 +194,74 @@ class WebDashboardSkill:
         def api_clear_intruders():
             self.orchestrator.audit.clear_logs()
             return jsonify({"success": True, "message": "Intrusion audit log cleared."})
+
+        # --- ESP32 Sentry Turret & Calibration Endpoints ---
+        @app.route("/api/turret/status", methods=["GET"])
+        def api_turret_status():
+            st = self.orchestrator.turret.get_status()
+            ports = self.orchestrator.turret.list_ports()
+            return jsonify({"status": st, "available_ports": ports})
+
+        @app.route("/api/turret/move", methods=["POST"])
+        def api_turret_move():
+            data = request.json or {}
+            pan = float(data.get("pan", 90.0))
+            tilt = float(data.get("tilt", 90.0))
+            laser = data.get("laser")
+            res = self.orchestrator.turret.manual_move(pan, tilt, laser=laser)
+            return jsonify(res)
+
+        @app.route("/api/turret/laser", methods=["POST"])
+        def api_turret_laser():
+            data = request.json or {}
+            state = bool(data.get("laser", False))
+            res = self.orchestrator.turret.set_laser(state)
+            return jsonify(res)
+
+        @app.route("/api/turret/pulse", methods=["POST"])
+        def api_turret_pulse():
+            res = self.orchestrator.turret.pulse_laser(duration_seconds=1.5)
+            return jsonify(res)
+
+        @app.route("/api/turret/calibrate_center", methods=["POST"])
+        def api_turret_calibrate_center():
+            res = self.orchestrator.turret.calibrate_center_current()
+            return jsonify(res)
+
+        @app.route("/api/turret/calibrate", methods=["POST"])
+        def api_turret_calibrate():
+            data = request.json or {}
+            res = self.orchestrator.turret.update_calibration(data)
+            return jsonify(res)
+
+        @app.route("/api/turret/reset_calibration", methods=["POST"])
+        def api_turret_reset_calib():
+            res = self.orchestrator.turret.reset_calibration()
+            return jsonify(res)
+
+        @app.route("/api/turret/reconnect", methods=["POST"])
+        def api_turret_reconnect():
+            data = request.json or {}
+            port = data.get("port")
+            res = self.orchestrator.turret.reconnect(port)
+            return jsonify(res)
+
+        @app.route("/api/turret/set_mode", methods=["POST"])
+        def api_turret_set_mode():
+            data = request.json or {}
+            mode = data.get("mode", "AUTO")
+            res = self.orchestrator.turret.set_mode(mode)
+            return jsonify(res)
+
+        @app.route("/api/turret/aim_pixel", methods=["POST"])
+        def api_turret_aim_pixel():
+            data = request.json or {}
+            px = float(data.get("x", 320))
+            py = float(data.get("y", 240))
+            laser = bool(data.get("laser", True))
+            res = self.orchestrator.turret.aim_at_pixel(px, py, laser=laser)
+            return jsonify(res)
+
 
     def _generate_mjpeg_stream(self):
         """Yields MJPEG encoded video multipart chunks from orchestrator process_cycle."""

@@ -24,6 +24,7 @@ class HUDSkill:
         person_location: Optional[PersonLocation] = None,
         fps: float = 0.0,
         is_dip_mode: bool = False,
+        turret_status: Optional[Any] = None,
     ) -> np.ndarray:
         """
         Overlays complete tactical HUD elements onto frame.
@@ -39,7 +40,7 @@ class HUDSkill:
         has_authorized = any(r.authorized for r in recognition_results)
 
         # 1. CCTV Chrome Top and Bottom Banners
-        self._draw_chrome(canvas, fps, has_unauthorized, has_authorized, is_dip_mode)
+        self._draw_chrome(canvas, fps, has_unauthorized, has_authorized, is_dip_mode, turret_status)
 
         # 2. Render Detections
         for r in recognition_results:
@@ -55,13 +56,14 @@ class HUDSkill:
             elif r.authorized:
                 self._draw_authorized_target(canvas, r)
             else:
-                self._draw_intruder_target(canvas, r)
+                self._draw_intruder_target(canvas, r, turret_status)
 
         # 3. Flashing perimeter alarm if intruder present
         if has_unauthorized:
             self._draw_perimeter_warning(canvas)
 
         return canvas
+
 
     def _draw_chrome(
         self,
@@ -70,6 +72,7 @@ class HUDSkill:
         has_unauthorized: bool,
         has_authorized: bool,
         is_dip_mode: bool,
+        turret_status: Optional[Any] = None,
     ):
         h, w = canvas.shape[:2]
         now_str = datetime.now().strftime("%Y-%m-%d  %H:%M:%S")
@@ -90,6 +93,19 @@ class HUDSkill:
 
         # Camera Tag
         cv2.putText(canvas, self.camera_name, (90, 23), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 220, 255), 1, cv2.LINE_AA)
+
+        # Sentry Turret Live Indicator in Top Bar
+        if turret_status is not None:
+            if getattr(turret_status, "laser", False) and getattr(turret_status, "target_locked", False):
+                t_color = (0, 0, 255) if (self.frame_count // 5) % 2 == 0 else (0, 120, 255)
+                t_text = f"LASER SENTRY: ENGAGED [P:{turret_status.pan:.0f}* T:{turret_status.tilt:.0f}*]"
+            elif getattr(turret_status, "connected", False):
+                t_color = (0, 220, 100)
+                t_text = f"TURRET: STANDBY [{turret_status.port}]"
+            else:
+                t_color = (180, 180, 180)
+                t_text = "TURRET: SIMULATION"
+            cv2.putText(canvas, t_text, (w // 2 - 120, 23), cv2.FONT_HERSHEY_SIMPLEX, 0.44, t_color, 1, cv2.LINE_AA)
 
         # Timestamp
         cv2.putText(canvas, now_str, (w - 220, 23), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (220, 220, 220), 1, cv2.LINE_AA)
@@ -128,7 +144,7 @@ class HUDSkill:
         cv2.putText(canvas, label_top, (x + 6, badge_y - 14), cv2.FONT_HERSHEY_DUPLEX, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
         cv2.putText(canvas, label_sub, (x + 6, badge_y - 3), cv2.FONT_HERSHEY_SIMPLEX, 0.38, color, 1, cv2.LINE_AA)
 
-    def _draw_intruder_target(self, canvas: np.ndarray, res: RecognitionResult):
+    def _draw_intruder_target(self, canvas: np.ndarray, res: RecognitionResult, turret_status: Optional[Any] = None):
         x, y, w, h = res.bbox
         cx, cy = x + w // 2, y + h // 2
         color = (0, 0, 255) if (self.frame_count // 6) % 2 == 0 else (0, 69, 255)
@@ -144,19 +160,25 @@ class HUDSkill:
         # Pointer Laser Callout
         callout_x = x + w + 15
         callout_y = y + 10
-        if callout_x + 230 > canvas.shape[1]:
-            callout_x = max(10, x - 245)
+        if callout_x + 250 > canvas.shape[1]:
+            callout_x = max(10, x - 260)
 
         anchor_x = x + w if callout_x > x else x
         cv2.line(canvas, (cx, cy), (anchor_x, y + 20), color, 2, cv2.LINE_AA)
         cv2.circle(canvas, (anchor_x, y + 20), 4, color, -1)
 
-        cv2.rectangle(canvas, (callout_x, callout_y), (callout_x + 240, callout_y + 56), (10, 10, 45), -1)
-        cv2.rectangle(canvas, (callout_x, callout_y), (callout_x + 240, callout_y + 56), color, 2)
+        card_h = 72 if (turret_status and getattr(turret_status, "target_locked", False)) else 56
+        cv2.rectangle(canvas, (callout_x, callout_y), (callout_x + 250, callout_y + card_h), (10, 10, 45), -1)
+        cv2.rectangle(canvas, (callout_x, callout_y), (callout_x + 250, callout_y + card_h), color, 2)
 
         cv2.putText(canvas, "[!] UNAUTHORIZED PERSON", (callout_x + 8, callout_y + 18), cv2.FONT_HERSHEY_DUPLEX, 0.46, (255, 255, 255), 1, cv2.LINE_AA)
         cv2.putText(canvas, "TARGET: NOT IN WHITELIST", (callout_x + 8, callout_y + 34), cv2.FONT_HERSHEY_SIMPLEX, 0.40, color, 1, cv2.LINE_AA)
         cv2.putText(canvas, f"THREAT: HIGH | SIM: {res.similarity:.2f}", (callout_x + 8, callout_y + 49), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (200, 200, 200), 1, cv2.LINE_AA)
+
+        if turret_status and getattr(turret_status, "target_locked", False):
+            laser_text = f">> LASER ACTIVE: P:{turret_status.pan:.0f}* T:{turret_status.tilt:.0f}*"
+            cv2.putText(canvas, laser_text, (callout_x + 8, callout_y + 65), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (0, 255, 255), 1, cv2.LINE_AA)
+
 
     def _draw_located_target(self, canvas: np.ndarray, res: RecognitionResult, loc: PersonLocation):
         x, y, w, h = res.bbox
